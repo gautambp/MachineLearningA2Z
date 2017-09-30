@@ -2,13 +2,13 @@
 
 # read dataset
 import pandas as pd
-dataset = pd.read_csv('Wine.csv')
-x = dataset.iloc[:, 0:13].values
-y = dataset.iloc[:, 13].values
+dataset = pd.read_csv('Social_Network_Ads.csv')
+x = dataset.iloc[:, [2,3]].values
+y = dataset.iloc[:, 4].values
 
 # split dataset into train and test
 from sklearn.model_selection import train_test_split
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=1/4, random_state=0)
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=1/5, random_state=0)
 
 # scale all the features
 from sklearn.preprocessing import StandardScaler
@@ -16,37 +16,39 @@ sc_x = StandardScaler()
 x_train = sc_x.fit_transform(x_train)
 x_test = sc_x.transform(x_test)
 
-from sklearn.decomposition import PCA
-pca = PCA(n_components=None, random_state=0)
-x_train_trial = pca.fit_transform(x_train)
-x_test_trial = pca.transform(x_test)
-explained_variance = pca.explained_variance_ratio_
-# looking into explained variance, we can see that almost 58% of variance is explained by 
-# two features.. so we'll run pca again with only 2 components.. will reduce from 13 features to 2
-# since it's only 2 components, so we'll able to visualize data in 2D
-pca = PCA(n_components=2, random_state=0)
-# transform train and test data to lower dimensions
-x_train = pca.fit_transform(x_train)
-x_test = pca.transform(x_test)
-
-# Create the model and fit it to the train data
-from sklearn.linear_model import LogisticRegression
-model = LogisticRegression(random_state=0)
+from sklearn.svm import SVC
+model = SVC(kernel='rbf', random_state=0)
 model.fit(x_train, y_train)
 
-# predict values for test dataset
+# predict on the test data and learn about performance using confusion matrix
 y_pred = model.predict(x_test)
+
 from sklearn.metrics import confusion_matrix
 cm = confusion_matrix(y_test, y_pred)
 print(cm)
 
-# visualize train, test, against actual and predicted values
+# apply k-fold cross validation
+from sklearn.model_selection import cross_val_score
+accuracies = cross_val_score(estimator=model, X=x_train, y=y_train, cv=10)
+print(accuracies.mean())
+
+# Utilize grid search to find optimal kernel algorithm with hyper tuned params
+from sklearn.model_selection import GridSearchCV
+# pick parameters with set of values to try to find optimal model params
+params = [{'C': [1, 10, 100], 'kernel': ['linear']},
+          {'C': [1, 10, 100], 'kernel': ['rbf'], 'gamma': [0.5, 0.1, 0.01]}]
+grdSearch = GridSearchCV(estimator=model, param_grid=params, scoring='accuracy', cv=10)
+grdSearch.fit(x_train, y_train)
+print(grdSearch.best_score_)
+print(grdSearch.best_params_)
+
+# define a scatter plot visualization func
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import numpy as np
 
 def visualize(x_set, y_set):
-    cmap = ListedColormap(('red', 'green', 'blue'))
+    cmap = ListedColormap(('red', 'blue'))
     X1, X2 = np.meshgrid(np.arange(start = x_set[:, 0].min() - 1, stop = x_set[:, 0].max() + 1, step = 0.01),
                          np.arange(start = x_set[:, 1].min() - 1, stop = x_set[:, 1].max() + 1, step = 0.01))
     plt.contourf(X1, X2, model.predict(np.array([X1.ravel(), X2.ravel()]).T).reshape(X1.shape),
@@ -54,7 +56,7 @@ def visualize(x_set, y_set):
     plt.xlim(X1.min(), X1.max())
     plt.ylim(X2.min(), X2.max())
     for i, j in enumerate(np.unique(y_set)):    
-        plt.scatter(x_set[y_set == j,0], x_set[y_set == j,1], c='black')
+        plt.scatter(x_set[y_set == j,0], x_set[y_set == j,1], c=cmap(j))
     plt.show()
 
 # visualize the train data
